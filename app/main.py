@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router as api_router
 from app.api.websocket import manager, ws_router
@@ -70,15 +73,12 @@ app.include_router(api_router)
 app.include_router(ws_router)
 
 
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
 @app.get("/")
 async def root():
-    return {
-        "service": "AI Message Router",
-        "version": "0.1.0",
-        "docs": "/docs",
-        "websocket": "/ws",
-        "providers_enabled": [p.value for p in ai_router.get_enabled_providers()],
-    }
+    return FileResponse(_STATIC_DIR / "index.html")
 
 
 @app.get("/health")

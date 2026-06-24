@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Boardroom</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0a0a1a;
+    color: #e0e0e0;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  #bg-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  .header h1 {
+    font-size: 2.4em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+  }
+  .header p {
+    color: #888;
+    font-size: 0.95em;
+  }
+
+  /* Provider selector */
+  .providers-bar {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .provider-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 30px;
+    border: 1.5px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.88em;
+    user-select: none;
+    perspective: 600px;
+  }
+  .provider-chip:hover {
+    transform: translateY(-2px) rotateX(5deg);
+    border-color: rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  }
+  .provider-chip.selected {
+    border-color: var(--chip-color, #60a5fa);
+    background: rgba(96,165,250,0.12);
+    box-shadow: 0 0 15px rgba(96,165,250,0.15);
+  }
+  .provider-chip.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .provider-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--chip-color, #666);
+  }
+  .provider-chip.selected .provider-dot {
+    box-shadow: 0 0 8px var(--chip-color, #60a5fa);
+  }
+
+  /* Input area */
+  .input-area {
+    position: relative;
+    margin-bottom: 30px;
+  }
+  .input-area textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 18px 70px 18px 20px;
+    border-radius: 16px;
+    border: 1.5px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05);
+    color: #e0e0e0;
+    font-size: 1.05em;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+  .input-area textarea:focus {
+    border-color: rgba(96,165,250,0.5);
+    box-shadow: 0 0 25px rgba(96,165,250,0.1);
+  }
+  .input-area textarea::placeholder {
+    color: #555;
+  }
+  .send-btn {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+    font-size: 1.3em;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(59,130,246,0.3);
+  }
+  .send-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(59,130,246,0.5);
+  }
+  .send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .send-btn svg {
+    width: 22px; height: 22px;
+  }
+
+  /* Responses */
+  .responses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    flex: 1;
+    margin-bottom: 30px;
+  }
+
+  .response-card {
+    border-radius: 16px;
+    border: 1.5px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(12px);
+    overflow: hidden;
+    animation: cardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transition: transform 0.3s, box-shadow 0.3s;
+    perspective: 800px;
+  }
+  .response-card:hover {
+    transform: translateY(-4px) rotateX(2deg);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  }
+
+  @keyframes cardIn {
+    from {
+      opacity: 0;
+      transform: translateY(30px) rotateX(-10deg) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) rotateX(0) scale(1);
+    }
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+  }
+  .card-provider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card-provider-icon {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+    font-weight: 700;
+    color: white;
+  }
+  .card-provider-name {
+    font-weight: 600;
+    font-size: 0.95em;
+  }
+  .card-model {
+    font-size: 0.75em;
+    color: #888;
+    background: rgba(255,255,255,0.06);
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .card-body {
+    padding: 16px 18px;
+    font-size: 0.93em;
+    line-height: 1.65;
+    color: #ccc;
+    min-height: 60px;
+    white-space: pre-wrap;
+  }
+  .card-body.error {
+    color: #f87171;
+    font-style: italic;
+  }
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 18px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.78em;
+    color: #666;
+  }
+
+  /* Loading spinner */
+  .card-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #888;
+    font-style: italic;
+  }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-top: 2px solid var(--chip-color, #60a5fa);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Status bar */
+  .status-bar {
+    text-align: center;
+    padding: 12px;
+    font-size: 0.85em;
+    color: #666;
+  }
+  .status-bar.active {
+    color: #60a5fa;
+  }
+  .status-bar.done {
+    color: #4ade80;
+  }
+  .status-bar.error {
+    color: #f87171;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #444;
+  }
+  .empty-state .icon {
+    font-size: 3em;
+    margin-bottom: 16px;
+    opacity: 0.4;
+  }
+  .empty-state h2 {
+    font-size: 1.3em;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .empty-state p {
+    font-size: 0.9em;
+    max-width: 400px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .header h1 { font-size: 1.7em; }
+    .responses-grid { grid-template-columns: 1fr; }
+    .provider-chip { padding: 6px 12px; font-size: 0.82em; }
+  }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: rgba(30,30,50,0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 0.88em;
+    color: #e0e0e0;
+    backdrop-filter: blur(10px);
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 100;
+  }
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="app">
+  <div class="header">
+    <h1>AI Boardroom</h1>
+    <p>Ask a question, get answers from multiple AIs simultaneously</p>
+  </div>
+
+  <div class="providers-bar" id="providersBar"></div>
+
+  <div class="input-area">
+    <textarea id="promptInput" placeholder="Type your question here... e.g. &quot;What is the future of AI?&quot;" rows="3"></textarea>
+    <button class="send-btn" id="sendBtn" title="Send to AI Boardroom">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+
+  <div id="statusBar" class="status-bar"></div>
+
+  <div id="responsesArea">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">&#x1F4AC;</div>
+      <h2>Your AI boardroom is ready</h2>
+      <p>Select your AI providers above, type a question, and hit send. Responses will stream in real-time.</p>
+    </div>
+  </div>
+
+  <div class="responses-grid" id="responsesGrid" style="display:none;"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Provider config
+const PROVIDERS = {
+  openai:   { label: 'ChatGPT',  color: '#10a37f', icon: 'GP' },
+  claude:   { label: 'Claude',   color: '#d97706', icon: 'CL' },
+  gemini:   { label: 'Gemini',   color: '#4285f4', icon: 'GE' },
+  grok:     { label: 'Grok',     color: '#e11d48', icon: 'GR' },
+  deepseek: { label: 'DeepSeek', color: '#8b5cf6', icon: 'DS' },
+  ollama:   { label: 'Ollama',   color: '#22d3ee', icon: 'OL' },
+};
+
+let enabledProviders = [];
+let selectedProviders = new Set();
+let isLoading = false;
+
+// ─── Three.js 3D background ───
+function initBackground() {
+  const canvas = document.getElementById('bg-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.z = 5;
+
+  // Particles
+  const count = 1500;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const palette = [
+    [0.38, 0.65, 0.98],  // blue
+    [0.66, 0.55, 0.98],  // purple
+    [0.96, 0.45, 0.72],  // pink
+    [0.13, 0.64, 0.50],  // teal
+  ];
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3]     = (Math.random() - 0.5) * 20;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
+    const c = palette[Math.floor(Math.random() * palette.length)];
+    colors[i * 3]     = c[0];
+    colors[i * 3 + 1] = c[1];
+    colors[i * 3 + 2] = c[2];
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  const mat = new THREE.PointsMaterial({
+    size: 0.04,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.7,
+    sizeAttenuation: true,
+  });
+
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+
+  // Central glowing sphere
+  const sphereGeo = new THREE.IcosahedronGeometry(0.8, 3);
+  const sphereMat = new THREE.MeshBasicMaterial({
+    color: 0x3b82f6,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.08,
+  });
+  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+  scene.add(sphere);
+
+  // Orbit rings
+  for (let i = 0; i < 3; i++) {
+    const ringGeo = new THREE.TorusGeometry(1.5 + i * 0.8, 0.005, 8, 100);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: [0x60a5fa, 0xa78bfa, 0xf472b6][i],
+      transparent: true,
+      opacity: 0.1,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI * 0.3 + i * 0.3;
+    ring.rotation.y = i * 0.5;
+    scene.add(ring);
+  }
+
+  let mouseX = 0, mouseY = 0;
+  document.addEventListener('mousemove', (e) => {
+    mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+    mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const t = Date.now() * 0.0003;
+    points.rotation.y = t * 0.3;
+    points.rotation.x = t * 0.15;
+    sphere.rotation.y = t * 0.5;
+    sphere.rotation.x = t * 0.25;
+
+    camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.02;
+    camera.position.y += (-mouseY * 0.5 - camera.position.y) * 0.02;
+    camera.lookAt(0, 0, 0);
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+// ─── UI Logic ───
+function showToast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function setStatus(text, type = '') {
+  const el = document.getElementById('statusBar');
+  el.textContent = text;
+  el.className = 'status-bar' + (type ? ' ' + type : '');
+}
+
+async function loadProviders() {
+  try {
+    const res = await fetch('/api/providers');
+    const providers = await res.json();
+    enabledProviders = providers.filter(p => p.enabled).map(p => p.name);
+    selectedProviders = new Set(enabledProviders);
+    renderProviderChips(providers);
+  } catch (e) {
+    showToast('Could not load providers. Is the server running?');
+  }
+}
+
+function renderProviderChips(providers) {
+  const bar = document.getElementById('providersBar');
+  bar.innerHTML = '';
+  providers.forEach(p => {
+    const cfg = PROVIDERS[p.name] || { label: p.name, color: '#888', icon: '??' };
+    const chip = document.createElement('div');
+    chip.className = 'provider-chip' + (p.enabled && selectedProviders.has(p.name) ? ' selected' : '') + (!p.enabled ? ' disabled' : '');
+    chip.style.setProperty('--chip-color', cfg.color);
+    chip.innerHTML = `<div class="provider-dot"></div><span>${cfg.label}</span>`;
+    chip.title = p.enabled ? `${cfg.label} (${p.model})` : `${cfg.label} - not configured`;
+
+    if (p.enabled) {
+      chip.addEventListener('click', () => {
+        if (isLoading) return;
+        if (selectedProviders.has(p.name)) {
+          selectedProviders.delete(p.name);
+          chip.classList.remove('selected');
+        } else {
+          selectedProviders.add(p.name);
+          chip.classList.add('selected');
+        }
+      });
+    }
+    bar.appendChild(chip);
+  });
+}
+
+function createResponseCard(providerName, state = 'loading') {
+  const cfg = PROVIDERS[providerName] || { label: providerName, color: '#888', icon: '??' };
+  const card = document.createElement('div');
+  card.className = 'response-card';
+  card.id = `card-${providerName}`;
+  card.style.setProperty('--chip-color', cfg.color);
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="card-provider">
+        <div class="card-provider-icon" style="background:${cfg.color}">${cfg.icon}</div>
+        <span class="card-provider-name">${cfg.label}</span>
+      </div>
+      <span class="card-model" id="model-${providerName}">...</span>
+    </div>
+    <div class="card-body" id="body-${providerName}">
+      <div class="card-loading">
+        <div class="spinner" style="border-top-color:${cfg.color}"></div>
+        <span>Thinking...</span>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span id="latency-${providerName}"></span>
+      <span id="tokens-${providerName}"></span>
+    </div>
+  `;
+  return card;
+}
+
+function updateCard(resp) {
+  const name = resp.provider;
+  const cfg = PROVIDERS[name] || { label: name, color: '#888' };
+  const body = document.getElementById(`body-${name}`);
+  const model = document.getElementById(`model-${name}`);
+  const latency = document.getElementById(`latency-${name}`);
+  const tokens = document.getElementById(`tokens-${name}`);
+
+  if (!body) return;
+
+  model.textContent = resp.model || '?';
+
+  if (resp.error) {
+    body.className = 'card-body error';
+    // Make error messages more human-friendly
+    let errMsg = resp.error;
+    if (errMsg.includes('not enabled')) errMsg = 'Not configured - add API key to .env';
+    else if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota')) errMsg = 'Quota exceeded - enable billing on this API';
+    else if (errMsg.includes('Insufficient Balance')) errMsg = 'Insufficient balance - add funds to account';
+    else if (errMsg.includes('permission-denied') || errMsg.includes('credits')) errMsg = 'No credits - purchase credits for this provider';
+    else if (errMsg.includes('Model not found')) errMsg = 'Model not available - update model in .env';
+    else if (errMsg.includes('Timeout')) errMsg = 'Timed out - provider took too long';
+    else if (errMsg.includes('Connection') || errMsg.includes('connect')) errMsg = 'Cannot connect - is the service running?';
+    body.textContent = errMsg;
+  } else {
+    body.className = 'card-body';
+    body.textContent = resp.content;
+  }
+
+  latency.textContent = resp.latency_ms ? `${(resp.latency_ms / 1000).toFixed(1)}s` : '';
+
+  if (resp.token_usage) {
+    const t = resp.token_usage;
+    const total = t.total_tokens || (t.input_tokens || 0) + (t.output_tokens || 0);
+    tokens.textContent = total ? `${total} tokens` : '';
+  }
+}
+
+async function sendPrompt() {
+  const input = document.getElementById('promptInput');
+  const prompt = input.value.trim();
+  if (!prompt) { showToast('Please type a question first'); return; }
+  if (selectedProviders.size === 0) { showToast('Please select at least one AI provider'); return; }
+  if (isLoading) return;
+
+  isLoading = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  // Show grid, hide empty state
+  document.getElementById('emptyState').style.display = 'none';
+  const grid = document.getElementById('responsesGrid');
+  grid.style.display = 'grid';
+  grid.innerHTML = '';
+
+  const providers = Array.from(selectedProviders);
+
+  // Create placeholder cards
+  providers.forEach((name, i) => {
+    const card = createResponseCard(name);
+    card.style.animationDelay = `${i * 0.1}s`;
+    grid.appendChild(card);
+  });
+
+  setStatus(`Sending to ${providers.length} AI provider${providers.length > 1 ? 's' : ''}...`, 'active');
+
+  // Try WebSocket first for real-time streaming
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${location.host}/ws`;
+
+  try {
+    const ws = new WebSocket(wsUrl);
+    let receivedCount = 0;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        event: 'submit_task',
+        data: { prompt, providers }
+      }));
+    };
+
+    ws.onmessage = (evt) => {
+      const msg = JSON.parse(evt.data);
+
+      if (msg.event === 'provider_response') {
+        receivedCount++;
+        updateCard(msg.data);
+        setStatus(`Received ${receivedCount} of ${providers.length} responses...`, 'active');
+      }
+
+      if (msg.event === 'task_completed') {
+        const data = msg.data;
+        const successCount = (data.responses || []).filter(r => !r.error).length;
+        setStatus(
+          `Done! ${successCount} of ${providers.length} providers responded successfully.`,
+          successCount > 0 ? 'done' : 'error'
+        );
+        isLoading = false;
+        document.getElementById('sendBtn').disabled = false;
+        ws.close();
+      }
+
+      if (msg.event === 'error') {
+        setStatus('Error: ' + (msg.data?.message || 'Unknown error'), 'error');
+        isLoading = false;
+        document.getElementById('sendBtn').disabled = false;
+        ws.close();
+      }
+    };
+
+    ws.onerror = () => {
+      // Fallback to REST API
+      fallbackToRest(prompt, providers);
+    };
+
+    ws.onclose = (e) => {
+      if (receivedCount === 0 && isLoading) {
+        // WebSocket closed before any responses - fallback
+        fallbackToRest(prompt, providers);
+      }
+    };
+
+  } catch (e) {
+    fallbackToRest(prompt, providers);
+  }
+}
+
+async function fallbackToRest(prompt, providers) {
+  try {
+    setStatus('Waiting for all providers to respond...', 'active');
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, providers }),
+    });
+    const data = await res.json();
+
+    (data.responses || []).forEach(resp => updateCard(resp));
+
+    const successCount = (data.responses || []).filter(r => !r.error).length;
+    setStatus(
+      `Done! ${successCount} of ${providers.length} providers responded successfully.`,
+      successCount > 0 ? 'done' : 'error'
+    );
+  } catch (e) {
+    setStatus('Failed to connect to server. Is it running?', 'error');
+  }
+  isLoading = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+
+// ─── Init ───
+document.getElementById('sendBtn').addEventListener('click', sendPrompt);
+document.getElementById('promptInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendPrompt();
+  }
+});
+
+initBackground();
+loadProviders();
+</script>
+</body>
+</html>
