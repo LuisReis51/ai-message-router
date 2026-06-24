@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import AsyncIterator
 
 import httpx
 
@@ -24,14 +23,6 @@ class OllamaProvider(BaseProvider):
 
     def is_enabled(self) -> bool:
         return bool(self.base_url)
-
-    async def _check_health(self) -> bool:
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.base_url}/api/tags")
-                return resp.status_code == 200
-        except Exception:
-            return False
 
     async def generate(
         self,
@@ -72,35 +63,3 @@ class OllamaProvider(BaseProvider):
         except Exception as exc:
             logger.exception("Ollama provider error")
             return self._make_response("", start, error=str(exc))
-
-    async def stream(
-        self,
-        prompt: str,
-        *,
-        system_prompt: str | None = None,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-    ) -> AsyncIterator[str]:
-        payload: dict = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": True,
-            "options": {
-                "temperature": temperature,
-                "num_predict": max_tokens,
-            },
-        }
-        if system_prompt:
-            payload["system"] = system_prompt
-
-        async with httpx.AsyncClient(timeout=settings.provider_timeout) as client:
-            async with client.stream("POST", f"{self.base_url}/api/generate", json=payload) as resp:
-                resp.raise_for_status()
-                import json
-
-                async for line in resp.aiter_lines():
-                    if line.strip():
-                        chunk = json.loads(line)
-                        token = chunk.get("response", "")
-                        if token:
-                            yield token

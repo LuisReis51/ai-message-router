@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import AsyncIterator
 
 from anthropic import AsyncAnthropic
 
@@ -58,25 +57,3 @@ class ClaudeProvider(BaseProvider):
         except Exception as exc:
             logger.exception("Claude provider error")
             return self._make_response("", start, error=str(exc))
-
-    async def stream(
-        self,
-        prompt: str,
-        *,
-        system_prompt: str | None = None,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-    ) -> AsyncIterator[str]:
-        client = self._get_client()
-        kwargs: dict = {
-            "model": self.model,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        if system_prompt:
-            kwargs["system"] = system_prompt
-
-        async with client.messages.stream(**kwargs) as stream:
-            async for text in stream.text_stream:
-                yield text

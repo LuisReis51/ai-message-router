@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any
 
 import redis.asyncio as aioredis
 
@@ -16,11 +14,10 @@ TASK_TTL = 3600  # 1 hour
 
 
 class RedisService:
-    """Redis-backed caching, pub/sub, and task persistence."""
+    """Redis-backed task persistence."""
 
     def __init__(self) -> None:
         self._redis: aioredis.Redis | None = None
-        self._pubsub: aioredis.client.PubSub | None = None
 
     async def connect(self) -> None:
         try:
@@ -58,18 +55,3 @@ class RedisService:
         if data:
             return TaskResult.model_validate_json(data)
         return None
-
-    async def publish_event(self, channel: str, data: dict[str, Any]) -> None:
-        if not self._redis:
-            return
-        await self._redis.publish(channel, json.dumps(data))
-
-    async def cache_set(self, key: str, value: str, ttl: int = 300) -> None:
-        if not self._redis:
-            return
-        await self._redis.set(key, value, ex=ttl)
-
-    async def cache_get(self, key: str) -> str | None:
-        if not self._redis:
-            return None
-        return await self._redis.get(key)

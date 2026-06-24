@@ -28,16 +28,6 @@ class ConnectionManager:
         self._connections.remove(ws)
         logger.info("WebSocket client disconnected (%d remaining)", len(self._connections))
 
-    async def broadcast(self, message: WSMessage) -> None:
-        dead: list[WebSocket] = []
-        for ws in self._connections:
-            try:
-                await ws.send_json(message.model_dump(mode="json"))
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self._connections.remove(ws)
-
     @property
     def active_count(self) -> int:
         return len(self._connections)
@@ -82,9 +72,16 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         manager.disconnect(ws)
 
 
+def _get_services():
+    """Lazy import to avoid circular deps."""
+    from app.main import ai_router, redis_service, windsurf_service
+
+    return ai_router, redis_service, windsurf_service
+
+
 async def _handle_submit(ws: WebSocket, data: dict) -> None:
     """Handle a task submission via WebSocket."""
-    from app.main import ai_router, redis_service, windsurf_service
+    ai_router, redis_service, windsurf_service = _get_services()
 
     try:
         request = TaskRequest(**data)
@@ -144,8 +141,7 @@ async def _handle_submit(ws: WebSocket, data: dict) -> None:
 
 
 async def _handle_list_providers(ws: WebSocket) -> None:
-    from app.main import ai_router
-
+    ai_router, _, _ = _get_services()
     statuses = ai_router.get_provider_statuses()
     await ws.send_json(
         WSMessage(
