@@ -17,11 +17,11 @@ class Settings(BaseSettings):
 
     # --- Google (Gemini) ---
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-1.5-pro"
+    gemini_model: str = "gemini-2.0-flash"
 
     # --- xAI (Grok) ---
     grok_api_key: str = ""
-    grok_model: str = "grok-2"
+    grok_model: str = "grok-3"
     grok_base_url: str = "https://api.x.ai/v1"
 
     # --- DeepSeek ---
