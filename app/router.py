@@ -81,13 +81,16 @@ class AIRouter:
             async with sem:
                 provider = self._providers[name]
                 if not provider.is_enabled():
-                    return ProviderResponse(
+                    resp = ProviderResponse(
                         provider=name,
                         model=provider.model,
                         content="",
                         latency_ms=0,
                         error="Provider not enabled (missing API key)",
                     )
+                    if on_response:
+                        await on_response.put(resp)
+                    return resp
                 try:
                     resp = await asyncio.wait_for(
                         provider.generate(
