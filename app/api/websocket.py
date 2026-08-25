@@ -131,8 +131,9 @@ async def _handle_submit(ws: WebSocket, data: dict) -> None:
     await redis_service.store_task(result)
 
     if request.push_to_windsurf:
-        pushed = await windsurf_service.push_results(result)
-        result.metadata["windsurf_pushed"] = pushed
+        push = await windsurf_service.push_results(result)
+        result.metadata["windsurf_pushed"] = push.delivered
+        result.metadata["windsurf"] = push.model_dump(mode="json")
 
     await ws.send_json(
         WSMessage(

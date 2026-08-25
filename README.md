@@ -133,6 +133,25 @@ Results are pushed to Windsurf via:
 
 Set `push_to_windsurf: true` in your task request, or call `POST /api/tasks/{task_id}/push-windsurf` after.
 
+Only the HTTP push reaches the IDE. `delivered` is true for that case alone — a
+successful file fallback leaves it false, since the payload is merely persisted
+for the extension to pick up later. The outcome is reported on the task as
+`metadata.windsurf` (and `metadata.windsurf_pushed`, an alias for `delivered`):
+
+```json
+{
+  "delivered": false,
+  "channel": "file",
+  "endpoint": "http://localhost:3000/api/ai-router/results",
+  "filepath": "/home/you/.ai-router/windsurf/d6e901c535a9.json",
+  "http_error": "ConnectError: All connection attempts failed",
+  "file_error": null
+}
+```
+
+If the HTTP push and the file write both fail, `channel` is `null` and both
+error fields are populated.
+
 ## Configuration
 
 All configuration is via environment variables (or `.env` file):
