@@ -71,7 +71,8 @@ class WindsurfService:
                 return f"HTTP {resp.status_code} from {self.results_endpoint}"
         except Exception as exc:
             logger.debug("Windsurf HTTP push failed: %s", exc)
-            return f"{type(exc).__name__}: {exc}"
+            # Some httpx exceptions (e.g. ReadTimeout) carry an empty message.
+            return f"{type(exc).__name__}: {str(exc) or 'no detail'}"
 
     def _push_file(self, payload: dict, task_id: str) -> tuple[str | None, str | None]:
         """Write the payload for extension pickup. Returns (filepath, error)."""
