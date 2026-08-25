@@ -69,6 +69,27 @@ class TaskResult(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class WindsurfChannel(str, Enum):
+    HTTP = "http"
+    FILE = "file"
+
+
+class WindsurfPushResult(BaseModel):
+    """Outcome of pushing a TaskResult to Windsurf.
+
+    ``delivered`` is True only when the Windsurf IDE listener accepted the
+    payload over HTTP. A successful file fallback leaves ``delivered`` False:
+    the payload is persisted for later pickup but has not reached the IDE.
+    """
+
+    delivered: bool
+    channel: WindsurfChannel | None = None
+    endpoint: str | None = None
+    filepath: str | None = None
+    http_error: str | None = None
+    file_error: str | None = None
+
+
 class ProviderStatus(BaseModel):
     """Health/availability status for a provider."""
 

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 import httpx
 
 from app.config import settings
-from app.models import TaskResult
+from app.models import TaskResult, WindsurfChannel, WindsurfPushResult
 
 logger = logging.getLogger(__name__)
 
@@ -25,49 +26,66 @@ class WindsurfService:
 
     def __init__(self) -> None:
         self.base_url = f"http://{settings.windsurf_host}:{settings.windsurf_port}"
+        self.results_endpoint = f"{self.base_url}/api/ai-router/results"
 
-    async def push_results(self, result: TaskResult) -> bool:
-        """Push a TaskResult to Windsurf. Returns True on success."""
+    async def push_results(self, result: TaskResult) -> WindsurfPushResult:
+        """Push a TaskResult to Windsurf.
+
+        Attempts the HTTP push first; only that counts as delivered to the IDE.
+        On failure the payload is written to disk for extension pickup, which is
+        reported as the ``file`` channel with ``delivered`` still False.
+        """
         payload = self._format_payload(result)
 
-        # Try HTTP push first
-        if await self._push_http(payload):
-            return True
+        http_error = await self._push_http(payload)
+        if http_error is None:
+            return WindsurfPushResult(
+                delivered=True,
+                channel=WindsurfChannel.HTTP,
+                endpoint=self.results_endpoint,
+            )
 
-        # Fallback: write to file for extension pickup
-        return self._push_file(payload, result.task_id)
+        filepath, file_error = self._push_file(payload, result.task_id)
+        return WindsurfPushResult(
+            delivered=False,
+            channel=WindsurfChannel.FILE if filepath else None,
+            endpoint=self.results_endpoint,
+            filepath=filepath,
+            http_error=http_error,
+            file_error=file_error,
+        )
 
-    async def _push_http(self, payload: dict) -> bool:
+    async def _push_http(self, payload: dict) -> str | None:
+        """POST the payload to Windsurf. Returns None on success, else the error."""
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
-                    f"{self.base_url}/api/ai-router/results",
+                    self.results_endpoint,
                     json=payload,
                     headers={"Content-Type": "application/json"},
                 )
                 if resp.status_code in (200, 201, 204):
                     logger.info("Results pushed to Windsurf via HTTP")
-                    return True
+                    return None
                 logger.warning("Windsurf HTTP push returned %d", resp.status_code)
-                return False
+                return f"HTTP {resp.status_code} from {self.results_endpoint}"
         except Exception as exc:
             logger.debug("Windsurf HTTP push failed: %s", exc)
-            return False
+            return f"{type(exc).__name__}: {exc}"
 
-    def _push_file(self, payload: dict, task_id: str) -> bool:
+    def _push_file(self, payload: dict, task_id: str) -> tuple[str | None, str | None]:
+        """Write the payload for extension pickup. Returns (filepath, error)."""
         try:
-            import os
-
             output_dir = os.path.expanduser("~/.ai-router/windsurf")
             os.makedirs(output_dir, exist_ok=True)
             filepath = os.path.join(output_dir, f"{task_id}.json")
             with open(filepath, "w") as f:
                 json.dump(payload, f, indent=2, default=str)
-            logger.info("Results written to %s for Windsurf pickup", filepath)
-            return True
+            logger.info("Windsurf IDE unreachable; results written to %s for pickup", filepath)
+            return filepath, None
         except Exception as exc:
             logger.error("Windsurf file push failed: %s", exc)
-            return False
+            return None, f"{type(exc).__name__}: {exc}"
 
     def _format_payload(self, result: TaskResult) -> dict:
         """Format a TaskResult into a Windsurf-friendly payload."""

@@ -26,8 +26,9 @@ async def submit_task(request: TaskRequest) -> TaskResult:
 
     # Push to Windsurf if requested
     if request.push_to_windsurf:
-        pushed = await windsurf_svc.push_results(result)
-        result.metadata["windsurf_pushed"] = pushed
+        push = await windsurf_svc.push_results(result)
+        result.metadata["windsurf_pushed"] = push.delivered
+        result.metadata["windsurf"] = push.model_dump(mode="json")
 
     return result
 
@@ -78,5 +79,5 @@ async def push_to_windsurf(task_id: str) -> dict:
     if result is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-    pushed = await windsurf_svc.push_results(result)
-    return {"task_id": task_id, "pushed": pushed}
+    push = await windsurf_svc.push_results(result)
+    return {"task_id": task_id, "pushed": push.delivered, **push.model_dump(mode="json")}
